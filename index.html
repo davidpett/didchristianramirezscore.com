@@ -27,10 +27,8 @@
   <h1 style="font-size:6vw">This is not a <em>REAL</em>&nbsp;website</h1>
   
   <script>
-    if('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js', {
-        scope: '/'
-      });
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
     }
   </script>
 </body>
