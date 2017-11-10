@@ -1,0 +1,8 @@
+{
+  "name": "pseudo.website",
+  "short_name": "pseudo",
+  "lang": "en-US",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#FFFFFF"
+}
