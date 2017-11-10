@@ -1,113 +1,72 @@
-'use strict';
+/*
+ Copyright 2016 Google Inc. All Rights Reserved.
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+     http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
 
-// Licensed under a CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
-// http://creativecommons.org/publicdomain/zero/1.0/
+// Names of the two caches used in this version of the service worker.
+// Change to v2, etc. when you update any of the local resources, which will
+// in turn trigger the install event again.
+const PRECACHE = 'precache-v1';
+const RUNTIME = 'runtime';
 
-(function() {
+// A list of local resources we always want to be cached.
+const PRECACHE_URLS = [
+  'index.html',
+  './', // Alias for index.html
+];
 
-    // Update 'version' if you need to refresh the cache
-    var staticCacheName = 'static';
-    var version = 'v1::';
+// The install handler takes care of precaching the resources we always need.
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(PRECACHE)
+      .then(cache => cache.addAll(PRECACHE_URLS))
+      .then(self.skipWaiting())
+  );
+});
 
-    // Store core files in a cache (including a page to display when offline)
-    function updateStaticCache() {
-        return caches.open(version + staticCacheName)
-            .then(function (cache) {
-                return cache.addAll([
-                    '/images/icons/icon-72x72.png',
-                    '/images/icons/icon-96x96.png',
-                    '/images/icons/icon-128x128.png',
-                    '/images/icons/icon-144x144.png',
-                    '/images/icons/icon-152x152.png',
-                    '/images/icons/icon-192x192.png',
-                    '/images/icons/icon-384x384.png',
-                    '/images/icons/icon-512x512.png',
-                    '/',
-                    '/index.html
-                ]);
+// The activate handler takes care of cleaning up old caches.
+self.addEventListener('activate', event => {
+  const currentCaches = [PRECACHE, RUNTIME];
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return cacheNames.filter(cacheName => !currentCaches.includes(cacheName));
+    }).then(cachesToDelete => {
+      return Promise.all(cachesToDelete.map(cacheToDelete => {
+        return caches.delete(cacheToDelete);
+      }));
+    }).then(() => self.clients.claim())
+  );
+});
+
+// The fetch handler serves responses for same-origin resources from a cache.
+// If no response is found, it populates the runtime cache with the response
+// from the network before returning it to the page.
+self.addEventListener('fetch', event => {
+  // Skip cross-origin requests, like those for Google Analytics.
+  if (event.request.url.startsWith(self.location.origin)) {
+    event.respondWith(
+      caches.match(event.request).then(cachedResponse => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        return caches.open(RUNTIME).then(cache => {
+          return fetch(event.request).then(response => {
+            // Put a copy of the response in the runtime cache.
+            return cache.put(event.request, response.clone()).then(() => {
+              return response;
             });
-    };
-
-    self.addEventListener('install', function (event) {
-        event.waitUntil(updateStaticCache());
-    });
-
-    self.addEventListener('activate', function (event) {
-        event.waitUntil(
-            caches.keys()
-                .then(function (keys) {
-                    // Remove caches whose name is no longer valid
-                    return Promise.all(keys
-                        .filter(function (key) {
-                          return key.indexOf(version) !== 0;
-                        })
-                        .map(function (key) {
-                          return caches.delete(key);
-                        })
-                    );
-                })
-        );
-    });
-
-    self.addEventListener('fetch', function (event) {
-        var request = event.request;
-        // Always fetch non-GET requests from the network
-        if (request.method !== 'GET') {
-            event.respondWith(
-                fetch(request)
-                    .catch(function () {
-                        return caches.match('/index.html');
-                    })
-            );
-            return;
-        }
-
-        // For HTML requests, try the network first, fall back to the cache, finally the offline page
-        if (request.headers.get('Accept').indexOf('text/html') !== -1) {
-            // Fix for Chrome bug: https://code.google.com/p/chromium/issues/detail?id=573937
-            if (request.mode != 'navigate') {
-                request = new Request(request.url, {
-                    method: 'GET',
-                    headers: request.headers,
-                    mode: request.mode,
-                    credentials: request.credentials,
-                    redirect: request.redirect
-                });
-            }
-            event.respondWith(
-                fetch(request)
-                    .then(function (response) {
-                        // Stash a copy of this page in the cache
-                        var copy = response.clone();
-                        caches.open(version + staticCacheName)
-                            .then(function (cache) {
-                                cache.put(request, copy);
-                            });
-                        return response;
-                    })
-                    .catch(function () {
-                        return caches.match(request)
-                            .then(function (response) {
-                                return response || caches.match('/index.html');
-                            })
-                    })
-            );
-            return;
-        }
-
-        // For non-HTML requests, look in the cache first, fall back to the network
-        event.respondWith(
-            caches.match(request)
-                .then(function (response) {
-                    return response || fetch(request)
-                        .catch(function () {
-                            // If the request is for an image, show an offline placeholder
-                            if (request.headers.get('Accept').indexOf('image') !== -1) {
-                                return new Response('<svg width="400" height="300" role="img" aria-labelledby="offline-title" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg"><title id="offline-title">Offline</title><g fill="none" fill-rule="evenodd"><path fill="#D8D8D8" d="M0 0h400v300H0z"/><text fill="#9B9B9B" font-family="Helvetica Neue,Arial,Helvetica,sans-serif" font-size="72" font-weight="bold"><tspan x="93" y="172">offline</tspan></text></g></svg>', { headers: { 'Content-Type': 'image/svg+xml' }});
-                            }
-                        });
-                })
-        );
-    });
-
-})();
+          });
+        });
+      })
+    );
+  }
+});
