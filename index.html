@@ -26,10 +26,17 @@
 <body style="align-items:center;display:flex;font-family:sans-serif;height:100vh;margin:0;justify-content:center;text-align:center;width:100vw;">
   <h1 style="font-size:6vw">This is not a <em>REAL</em>&nbsp;website</h1>
   
+  <script async src="https://www.googletagmanager.com/gtag/js?id=UA-2516077-9"></script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js');
     }
+    
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'UA-2516077-9');
   </script>
 </body>
 </html>
